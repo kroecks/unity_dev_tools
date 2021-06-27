@@ -7,7 +7,8 @@ using UnityEngine;
 
 public class FindMissingScriptsWindow : EditorWindow
 {
-    public static Queue<GameObject> scheduledObjects = new Queue<GameObject>();
+    public static Queue<GameObject> pendingDetectionQueue = new Queue<GameObject>();
+    public static Queue<GameObject> pendingOperationQueue = new Queue<GameObject>();
 
     public static HashSet<GameObject> found = new HashSet<GameObject>();
     
@@ -27,17 +28,31 @@ public class FindMissingScriptsWindow : EditorWindow
             
         if (found != null && found.Count > 0 && GUILayout.Button("Remove All"))
         {
-            EditorCoroutineUtility.StartCoroutine(RemoveFromAll(), this);
+            if (EditorUtility.DisplayDialog("Remove ALL Missing Scripts", "Are you sure?", "Ok", "Cancel"))
+            {
+                EditorCoroutineUtility.StartCoroutine(RemoveFromAll(), this);
+            }
         }
+        
         GUILayout.EndHorizontal();
+
+        if (pendingOperationQueue.Count > 0)
+        {
+            GUILayout.Label($"-------------------------------------");
+            GUILayout.Label($"PERFORMING OPERATION - QueueSize: " + pendingOperationQueue.Count);
+            GUILayout.Label($"-------------------------------------");
+
+            
+            return;
+        }
 
         GUILayout.BeginHorizontal();
 
-        if (scheduledObjects.Count > 0)
+        if (pendingDetectionQueue.Count > 0)
         {
             GUILayout.BeginVertical();
             GUILayout.Label($"-------------------------------------");
-            GUILayout.Label($"Searching! - QueueSize: " + scheduledObjects.Count);
+            GUILayout.Label($"Searching! - QueueSize: " + pendingDetectionQueue.Count);
             GUILayout.Label($"-------------------------------------");
             GUILayout.EndVertical();
         }
@@ -71,10 +86,13 @@ public class FindMissingScriptsWindow : EditorWindow
                     Selection.activeObject = go;
                 }
 
-                if (GUILayout.Button("Remove"))
+                if (GUILayout.Button("Remove Missing Scripts"))
                 {
-                    GameObjectUtility.RemoveMonoBehavioursWithMissingScript(go);
-                    pendingRemoval.Enqueue(go);
+                    if (EditorUtility.DisplayDialog("Remove Missing Scripts", "Are you sure?", "Ok", "Cancel"))
+                    {
+                        GameObjectUtility.RemoveMonoBehavioursWithMissingScript(go);
+                        pendingRemoval.Enqueue(go);
+                    }
                 }
                 GUILayout.EndHorizontal();
             }
@@ -93,12 +111,12 @@ public class FindMissingScriptsWindow : EditorWindow
         var foundObjects = Resources.LoadAll<GameObject>("/");
         foreach (var go in foundObjects)
         {
-            scheduledObjects.Enqueue(go);
+            pendingDetectionQueue.Enqueue(go);
         }
 
-        while (scheduledObjects.Count > 0)
+        while (pendingDetectionQueue.Count > 0)
         {
-            var pending = scheduledObjects.Dequeue();
+            var pending = pendingDetectionQueue.Dequeue();
             FindInGO(pending);
             yield return new WaitForEndOfFrame();
         }
